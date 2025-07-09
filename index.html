@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DATABASE PELAMAR FLK NAS</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      padding: 20px;
+      background: #e6f0fa;
+    }
+
+    h1 {
+      text-align: center;
+      color: #1a73e8;
+      margin-bottom: 20px;
+    }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    select, input[type="text"], button {
+      padding: 8px 12px;
+      border-radius: 20px;
+      border: 1px solid #b0c4de;
+      background-color: white;
+      font-size: 14px;
+    }
+
+    button {
+      background-color: #1a73e8;
+      color: white;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background-color: #0c5dc0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0 8px;
+    }
+
+    th {
+      background-color: #1a73e8;
+      color: white;
+      text-align: left;
+      padding: 8px;
+      border-radius: 8px 8px 0 0;
+      font-size: 13px;
+    }
+
+    td {
+      background-color: white;
+      padding: 8px;
+      border-radius: 0 0 8px 8px;
+      font-size: 13px;
+    }
+
+    tr {
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+
+    @media (max-width: 768px) {
+      .filters {
+        flex-direction: column;
+      }
+      table, thead, tbody, th, td, tr {
+        display: block;
+      }
+      thead {
+        display: none;
+      }
+      td {
+        position: relative;
+        padding-left: 50%;
+        margin-bottom: 5px;
+      }
+      td::before {
+        content: attr(data-label);
+        position: absolute;
+        left: 10px;
+        font-weight: bold;
+        white-space: nowrap;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<h1>DATABASE PELAMAR FLK NAS</h1>
+
+<div class="filters">
+  <input type="text" id="searchInput" placeholder="Cari...">
+  <select id="filterPosisi">
+    <option value="">Semua Posisi</option>
+  </select>
+  <select id="filterGender">
+    <option value="">Semua Gender</option>
+  </select>
+  <select id="filterPendidikan">
+    <option value="">Semua Pendidikan</option>
+  </select>
+  <button onclick="exportToExcel()">Export Excel</button>
+</div>
+
+<table>
+  <thead>
+    <tr id="tableHeader"></tr>
+  </thead>
+  <tbody id="tableBody"></tbody>
+</table>
+
+<script>
+const sheetUrl = "https://opensheet.elk.sh/1cRKdIFwWuHauauIZsJ7_nrzSjygh7PCNhLFXuIm5b3g/Form%20Pendaftaran%20Magang";
+
+// Kolom yang ditampilkan
+const allowedColumns = [
+  "TIMESTAMP", "EMAIL AKTIF", "SUMBER INFORMASI LOWONGAN",
+  "NAMA LENGKAP (SESUAI KTP)", "TANGGAL LAHIR", "NOMOR WA AKTIF", "NOMOR HP AKTIF",
+  "JENIS KELAMIN", "PENGALAMAN KERJA TERAKHIR", "DURASI PENGALAMAN KERJA",
+  "MINAT POSISI KERJA PERTAMA", "MINAT POSISI KERJA KEDUA", "MINAT POSISI KERJA KETIGA",
+  "PENDIDIKAN TERAKHIR", "NAMA SEKOLAH / NAMA UNIVERITAS", "JURUSAN",
+  "KEPEMILIKAN KENDARAAN", "KEPEMILIKAN SIM AKTIF", "ALAMAT DOMISILI",
+  "PROVINSI MINAT PENEMPATAN", "KOTA MINAT PENEMPATAN", "KECAMATAN", "KELURAHAN",
+  "UPLOAD CV", "NAMA REFERENSI", "TEMPAT INFORMASI", "MINAT INDUSTRI"
+];
+
+let dataGlobal = [];
+
+function createDropdown(id, key) {
+  const select = document.getElementById(id);
+  const unique = [...new Set(dataGlobal.map(d => d[key]).filter(Boolean))];
+  unique.sort().forEach(val => {
+    const opt = document.createElement("option");
+    opt.value = val;
+    opt.textContent = val;
+    select.appendChild(opt);
+  });
+}
+
+function loadData() {
+  fetch(sheetUrl)
+    .then(res => res.json())
+    .then(data => {
+      dataGlobal = data.map(row => {
+        let filtered = {};
+        allowedColumns.forEach(key => filtered[key] = row[key] || "");
+        return filtered;
+      });
+
+      renderTable(dataGlobal);
+      createDropdown("filterPosisi", "MINAT POSISI KERJA PERTAMA");
+      createDropdown("filterGender", "JENIS KELAMIN");
+      createDropdown("filterPendidikan", "PENDIDIKAN TERAKHIR");
+    });
+}
+
+function renderTable(data) {
+  const headerRow = document.getElementById("tableHeader");
+  const body = document.getElementById("tableBody");
+  headerRow.innerHTML = "";
+  body.innerHTML = "";
+
+  allowedColumns.forEach(h => {
+    const th = document.createElement("th");
+    th.textContent = h;
+    headerRow.appendChild(th);
+  });
+
+  data.forEach(row => {
+    const tr = document.createElement("tr");
+    allowedColumns.forEach(h => {
+      const td = document.createElement("td");
+      td.setAttribute("data-label", h);
+      td.textContent = row[h] || "-";
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+}
+
+function applyFilters() {
+  const search = document.getElementById("searchInput").value.toLowerCase();
+  const posisi = document.getElementById("filterPosisi").value;
+  const gender = document.getElementById("filterGender").value;
+  const pendidikan = document.getElementById("filterPendidikan").value;
+
+  const filtered = dataGlobal.filter(row => {
+    return (
+      (Object.values(row).some(val => val.toLowerCase().includes(search)) || !search) &&
+      (posisi === "" || row["MINAT POSISI KERJA PERTAMA"] === posisi) &&
+      (gender === "" || row["JENIS KELAMIN"] === gender) &&
+      (pendidikan === "" || row["PENDIDIKAN TERAKHIR"] === pendidikan)
+    );
+  });
+
+  renderTable(filtered);
+}
+
+function exportToExcel() {
+  const worksheet = XLSX.utils.json_to_sheet(dataGlobal);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Pelamar");
+  XLSX.writeFile(workbook, "Database_Pelamar_FLK_NAS.xlsx");
+}
+
+// Event listeners
+document.getElementById("searchInput").addEventListener("input", applyFilters);
+document.getElementById("filterPosisi").addEventListener("change", applyFilters);
+document.getElementById("filterGender").addEventListener("change", applyFilters);
+document.getElementById("filterPendidikan").addEventListener("change", applyFilters);
+
+// Start
+loadData();
+</script>
+
+</body>
+</html>
