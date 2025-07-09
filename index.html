@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>SIM DATABASE FLK</title>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    body { font-family: Arial; margin: 20px; }
+    th { position: relative; white-space: nowrap; }
+    .filter-btn { background: none; border: none; cursor: pointer; font-size: 14px; margin-left: 5px; }
+    .filter-container {
+      position: absolute; background: #fff; border: 1px solid #ccc;
+      padding: 8px; max-height: 200px; overflow-y: auto; box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      z-index: 9999; display: none; width: 220px;
+    }
+    #sheetTable_wrapper .dataTables_scrollBody {
+  max-height: 500px;
+  overflow-y: auto !important;
+}
+
+    .select-all-btn, .clear-all-btn {
+      cursor: pointer; background: #eee; border: 1px solid #ccc;
+      padding: 3px 6px; font-size: 12px; margin-right: 5px; margin-bottom: 8px;
+    }
+    .select-all-btn:hover, .clear-all-btn:hover { background: #ddd; }
+    .btn-download {
+      margin: 8px 8px 20px 0; padding: 8px 14px; border: none; border-radius: 4px; cursor: pointer;
+      color: white; background-color: #28a745;
+    }
+    .btn-download:hover { background-color: #218838; }
+    #logoutBtn {
+      float: right;
+      padding: 6px 12px;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #logoutBtn:hover {
+      background-color: #c82333;
+    }
+
+#loginHeader {
+  background-color: #003366; /* biru tua */
+  color: white;
+  padding: 16px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  border-radius: 0; /* hilangkan sudut lengkung */
+  margin: 0;         /* hilangkan margin atas dan bawah */
+  width: 100vw;      /* lebar penuh layar */
+  position: fixed;   /* tetap di posisi saat scroll */
+  top: 0;            /* paling atas */
+  left: 0;
+  z-index: 1000;     /* supaya di atas elemen lain */
+}
+td:nth-child(n) {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+<style>
+  /* Background overlay agar fokus di form */
+  body, html {
+    height: 100%;
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #003366, #00509e);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  #loginSection {
+  background-color: white;
+  padding: 40px 50px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  width: 320px;
+  text-align: center;
+
+  /* Pusatkan secara horizontal */
+  margin: 100px auto 0 auto; /* atas, kanan, bawah, kiri */
+}
+
+
+
+  #loginSection input[type="email"],
+  #loginSection input[type="password"] {
+    width: 100%;
+    padding: 12px 14px;
+    margin: 2px 0;
+    border: 2px solid #003366;
+    border-radius: 8px;
+    font-size: 16px;
+    outline-offset: 2px;
+    transition: border-color 0.3s ease;
+  }
+
+  #loginSection input[type="email"]:focus,
+  #loginSection input[type="password"]:focus {
+    border-color: #00509e;
+  }
+
+  #loginSection button {
+    background-color: #003366;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 0;
+    width: 110%;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  #loginSection button:hover {
+    background-color: #00509e;
+  }
+
+  #loginMsg {
+    margin-top: 16px;
+    font-weight: 600;
+  }
+  #sheetTable_wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+</style>
+
+
+  </style>
+</head>
+<body>
+
+<div id="loginSection" style="display:none;">
+  <div id="loginHeader">SIM Database Form Lamaran Kerja</div>
+  <input type="email" id="email" placeholder="Email"><br><br>
+  <input type="password" id="password" placeholder="Password"><br><br>
+  <button onclick="submitLogin()">Login</button>
+  <p id="loginMsg" style="color:red;"></p>
+</div>
+
+
+<div id="dataSection" style="display:none;">
+  <h2>SIM Database Form Lamaran Kerja <button id="logoutBtn" onclick="submitLogout()">Logout</button></h2>
+  <button class="btn-download" id="downloadAll">Download Semua Data (Excel)</button>
+  <button class="btn-download" id="downloadFiltered">Download Data yang Difilter (Excel)</button>
+
+  <table id="sheetTable" class="display nowrap" style="width:100%">
+    <thead><tr id="columnHeaders"></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+let table;
+let globalHeaders = [];
+let filters = {};
+
+document.addEventListener("DOMContentLoaded", function () {
+  google.script.run.withSuccessHandler(res => {
+    if (res.loggedIn) {
+      $('#loginSection').hide();
+      $('#dataSection').show();
+      google.script.run.withSuccessHandler(loadCSV).getCsvUrl(res.sheetName);
+    } else {
+      $('#loginSection').show();
+      $('#dataSection').hide();
+    }
+  }).getSession();
+});
+
+function submitLogin() {
+  const email = $('#email').val();
+  const password = $('#password').val();
+
+  google.script.run.withSuccessHandler(res => {
+    if (res.success) {
+      $('#loginSection').hide();
+      $('#dataSection').show();
+      google.script.run.withSuccessHandler(loadCSV).getCsvUrl(res.sheetName);
+    } else {
+      $('#loginMsg').text(res.message);
+    }
+  }).login(email, password);
+}
+
+function submitLogout() {
+  google.script.run.withSuccessHandler(() => {
+    // Hapus sesi tampilan data
+    if ($.fn.DataTable.isDataTable('#sheetTable')) {
+      $('#sheetTable').DataTable().clear().destroy();
+    }
+
+    $('#columnHeaders').empty();
+    $('#sheetTable tbody').empty();
+
+    $('#dataSection').hide();
+    $('#loginMsg').text('');
+    $('#email').val('');
+    $('#password').val('');
+    $('#loginSection').show();
+  }).logout();
+}
+
+
+function loadCSV(sheetUrl) {
+  Papa.parse(sheetUrl, {
+    download: true,
+    header: true,
+    complete: function (results) {
+      let data = results.data.filter(row => Object.values(row).some(v => v));
+      if (data.length === 0) return alert("Data kosong");
+
+      const headers = Object.keys(data[0]);
+      globalHeaders = headers;
+      filters = {};
+      $('#columnHeaders').empty();
+
+      headers.forEach((header, i) => {
+        $('#columnHeaders').append(`
+          <th>${header}
+            <button class="filter-btn" data-col="${i}">&#x25BC;</button>
+            <div class="filter-container" id="filter-${i}">
+              <input type="text" class="filter-search" placeholder="Cari..." style="width: 100%; margin-bottom: 8px;"><br>
+              <button class="select-all-btn" data-col="${i}">Select All</button>
+              <button class="clear-all-btn" data-col="${i}">Clear All</button><br><br>
+            </div>
+          </th>
+        `);
+        filters[i] = new Set();
+      });
+
+table = $('#sheetTable').DataTable({
+  data: data,
+  columns: headers.map(h => {
+  if (h.toLowerCase().includes("upload cv")) {
+    return {
+      data: h,
+      render: function(data) {
+        if (!data) return "";
+        return `<a href="${data}" target="_blank">Download CV</a>`;
+      }
+    };
+  } else if (h.toLowerCase().includes("domisili")) {
+    return {
+      data: h,
+      width: "120px", // Atur lebar maksimal kolom
+    };
+  } else {
+    return { data: h };
+  }
+}),
+
+  ordering: false,
+  pageLength: 10,
+  responsive: true,
+  dom: 'lrtip',
+  scrollX: true,         // ✅ Tambahkan ini
+  scrollY: "400px",
+  scrollCollapse: true,
+  fixedHeader: true
+});
+
+
+      headers.forEach((header, colIdx) => {
+        const $container = $(`#filter-${colIdx}`);
+        let colValues;
+
+        if (header.toLowerCase().includes("timestamp")) {
+          colValues = [...new Set(data.map(row => formatDateDMY(row[header])).filter(Boolean))];
+        } else {
+          colValues = [...new Set(data.map(row => row[header]).filter(Boolean).sort())];
+        }
+
+        colValues.forEach(val => {
+          const safeVal = $('<div>').text(val).html();
+          $container.append(`<label><input type="checkbox" value="${safeVal}" checked> ${safeVal}</label><br>`);
+          filters[colIdx].add(val);
+        });
+
+        $container.on('change', 'input[type="checkbox"]', function () {
+          const val = this.value;
+          if (this.checked) filters[colIdx].add(val);
+          else filters[colIdx].delete(val);
+          table.draw();
+        });
+
+        $container.on('click', '.select-all-btn', function () {
+          $container.find('input[type="checkbox"]').prop('checked', true);
+          filters[colIdx] = new Set($container.find('input[type="checkbox"]').map(function () { return this.value; }).get());
+          table.draw();
+        });
+
+        $container.on('click', '.clear-all-btn', function () {
+          $container.find('input[type="checkbox"]').prop('checked', false);
+          filters[colIdx].clear();
+          table.draw();
+        });
+
+        $container.on('input', '.filter-search', function () {
+          const term = $(this).val().toLowerCase();
+          $container.find('label').each(function () {
+            const txt = $(this).text().toLowerCase();
+            $(this).toggle(txt.indexOf(term) !== -1);
+          });
+        });
+      });
+
+      $.fn.dataTable.ext.search.push(function (settings, dataRow, dataIndex) {
+        const rowData = table.row(dataIndex).data();
+        for (const colIdx in filters) {
+          const header = headers[colIdx];
+          if (filters[colIdx].size === 0) continue;
+          if (header.toLowerCase().includes("timestamp")) {
+            const dateOnly = formatDateDMY(rowData[header]);
+            if (!filters[colIdx].has(dateOnly)) return false;
+          } else {
+            if (!filters[colIdx].has(rowData[header])) return false;
+          }
+        }
+        return true;
+      });
+
+      $('.filter-btn').on('click', function (e) {
+  e.stopPropagation();
+  const col = $(this).data('col');
+  
+  // Sembunyikan popup lain
+  $('.filter-container').hide();
+  
+  // Ambil filter container asli
+  const $filter = $(`#filter-${col}`);
+  
+  // Jika sudah ada di body, toggle saja tampilannya
+  if ($filter.parent().is('body')) {
+    if ($filter.is(':visible')) {
+      $filter.hide();
+      return;
+    }
+  } else {
+    // Pindahkan ke body supaya tidak terpotong scroll/table overflow
+    $filter.appendTo('body');
+  }
+  
+  // Cari posisi tombol filter untuk posisi popup
+  const btnOffset = $(this).offset();
+  const btnHeight = $(this).outerHeight();
+  
+  // Set posisi popup relatif ke tombol filter
+  $filter.css({
+    top: btnOffset.top + btnHeight + 4 + 'px', // sedikit jarak bawah tombol
+    left: btnOffset.left + 'px',
+    display: 'block',
+    position: 'absolute',
+    zIndex: 9999
+  });
+});
+
+
+      $(document).on('click', function (e) {
+        if (!$(e.target).closest('.filter-btn, .filter-container').length) {
+          $('.filter-container').hide();
+        }
+      });
+
+      $('#downloadAll').on('click', () => downloadExcel(data, headers, 'semua_data.xlsx'));
+      $('#downloadFiltered').on('click', () => {
+        const filteredData = table.rows({filter: 'applied'}).data().toArray();
+        downloadExcel(filteredData, headers, 'data_terfilter.xlsx');
+      });
+
+      function downloadExcel(dataArray, headers, filename) {
+        const ws_data = [headers];
+        dataArray.forEach(row => {
+          const rowArr = headers.map(h => row[h] || "");
+          ws_data.push(rowArr);
+        });
+        const ws = XLSX.utils.aoa_to_sheet(ws_data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+        XLSX.writeFile(wb, filename);
+      }
+
+      function formatDateDMY(dateStr) {
+        if (!dateStr) return "";
+        const d = new Date(dateStr);
+        if (isNaN(d)) return "";
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yyyy = d.getFullYear();
+        return `${dd}/${mm}/${yyyy}`;
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>
